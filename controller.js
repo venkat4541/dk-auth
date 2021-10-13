@@ -17,8 +17,6 @@ const getUsers = (req, res) => {
 const addUser = async (req, res) => {
     const { first_name, last_name, password, username } = req.body;
     const account_created = new Date();
-    const id = uuidv4();
-
     const hash = await bcrypt.hash(password,10);
     
     pool.query(queries.checkEmailExists, [username], (error, results) => {
@@ -26,7 +24,7 @@ const addUser = async (req, res) => {
             return res.status(400).send("Email already exists.");
         }
 
-        pool.query(queries.addUser, [id, first_name, last_name, hash, username, account_created], (error, results) => {
+        pool.query(queries.addUser, [first_name, last_name, hash, username, account_created], (error, results) => {
             if(error) throw error;
             return res.status(201).send("User added successfully!");
         });
@@ -36,26 +34,53 @@ const addUser = async (req, res) => {
 const updateUser = async (req, res) => {
     const {first_name, last_name, password, username} = req.body;
     const account_updated = new Date();
-
     const hash = await bcrypt.hash(password,10);
-
-    pool.query(queries.getUserByUsername, [username], (error, results) => {
-        const noUserFound = !results.rows.length;
-        if(noUserFound) {
-            return res.status(400).send("User doesn't exist");
-        }
-
-        pool.query(queries.updateUser,[first_name, last_name, hash, username, account_updated], (error, results) => {
-            if(error) throw error;
-            return res.status(204).send("User updated");
-        });
+    console.log('Update')
+    pool.query(queries.updateUser,[first_name, last_name, hash, username, account_updated], (error, results) => {
+        if(error) throw error;
+        return res.status(204).send("User updated");
     });
 
 };
 
+const getUser = async (username) => {
+    return new Promise(function(resolve, reject) {
+        pool.query(queries.getUserByUsername, [username], (error, results) => {
+            if (error) {
+                console.log(error);
+            }
+            if (!results || !results.rows || !results.rows.length) {
+                resolve(null);
+            } else {
+                const user = results.rows[0].username;
+                const hashedPass = results.rows[0].password;
+                resolve({user, hashedPass});
+            }
+
+        });
+    })
+    
+};
+
+const authenticate = async (username, password) => {
+    const userInfo = await getUser(username);
+    if (!userInfo) {
+        return null;
+    }
+    const user = userInfo.user;
+    const hashedPass = userInfo.hashedPass;
+    const verify = await bcrypt.compare(password, hashedPass);
+    if ( user && hashedPass && user === username && verify) {
+        return user;
+    } else {
+        return null;
+    }
+}
 
 module.exports = {
     getUsers,
+    getUser,
     addUser,
     updateUser,
+    authenticate
 };
